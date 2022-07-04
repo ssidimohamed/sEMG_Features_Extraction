@@ -24,7 +24,7 @@ def features_estimation(signal, channel_name, fs, frame, step, plot=False):
 
     """
 
-    features_names = ['MEAN', 'VAR', 'SD' 'RMS', 'IEMG', 'SSI', 'MAV', 'LOG', 'WL', 'ACC', 'DASDV', 'ZC', 'WAMP', 'MYOP', 'SKEW', 'KURT', 'SAMPEN' "FR", "MNP", "TP",
+    features_names = ['MEAN', 'VAR', 'SD' 'RMS', 'IEMG', 'SSI', 'MAV', 'MAV1', 'MAV2', 'MAVSLP' 'LOG', 'WL', 'ACC', 'DASDV', 'ZC', 'WAMP', 'MYOP', 'SKEW', 'KURT', 'SAMPEN', "HIST", "FR", "MNP", "TP",
                       "MNF", "MDF", "PKF", "WENT"]
 
     time_matrix = time_features_estimation(signal, frame, step)
@@ -58,6 +58,9 @@ def time_features_estimation(signal, frame, step):
     iemg = []
     ssi = []
     mav = []
+    mav1 = []
+    mav2 = []
+    mavslp = []
     log_detector = []
     wl = []
     aac = []
@@ -68,6 +71,7 @@ def time_features_estimation(signal, frame, step):
     skw = []
     kurt = []
     sampen = []
+    hist = []
 
     th = np.mean(signal) + 3 * np.std(signal)
 
@@ -81,6 +85,9 @@ def time_features_estimation(signal, frame, step):
         iemg.append(np.sum(abs(x)))  # Integral
         ssi.append(np.sum(abs(x)**2))  
         mav.append(np.sum(np.absolute(x)) / frame)  # Mean Absolute Value
+        mav1.append(getMAV1(signal))
+        mav2.append(getMAV2(signal))
+        mavslp.append(getMAVSLPk(signal))
         log_detector.append(np.exp(np.sum(np.log10(np.absolute(x))) / frame))
         wl.append(np.sum(abs(np.diff(x))))  # Wavelength
         aac.append(np.sum(abs(np.diff(x))) / frame)  # Average Amplitude Change
@@ -92,10 +99,11 @@ def time_features_estimation(signal, frame, step):
         skw.append(skew(x, bias=False))
         kurt.append(kurtosis(x, bias=False))
         sampen.append(ant.sample_entropy(x))
+        hist.append(getHIST(signal))
 
 
 
-    time_features_matrix = np.column_stack((mean, variance, std, rms, iemg, ssi, mav, log_detector, wl, aac, dasdv, zc, wamp, myop, skw, kurt, sampen))
+    time_features_matrix = np.column_stack((mean, variance, std, rms, iemg, ssi, mav, mav1, mav2, mavslp, log_detector, wl, aac, dasdv, zc, wamp, myop, skw, kurt, sampen, hist))
     return time_features_matrix
 
 
@@ -162,9 +170,80 @@ def wilson_amplitude(signal, th):
     return np.sum(umbral)
 
 
+
+def getMAV(signal):
+    """ Thif functions compute the  average of EMG signal Amplitude.::
+    """
+    
+    MAV = 1/len(signal) *  np.sum([abs(x) for x in signal])    
+    return(MAV)
+
+
+
+def getMAV1(signal):
+    """ This functoin evaluate Average of EMG signal Amplitude, using the modified version n°.1.::
+    """
+    wIndexMin = int(0.25 * len(signal))
+    wIndexMax = int(0.75 * len(signal))
+    absoluteSignal = [abs(x) for x in signal]
+    IEMG = 0.5 * np.sum([x for x in absoluteSignal[0:wIndexMin]]) + np.sum([x for x in absoluteSignal[wIndexMin:wIndexMax]]) + 0.5 * np.sum([x for x in absoluteSignal[wIndexMax:]])
+    MAV1 = IEMG / len(signal)
+    return(MAV1)
+
+
+def getMAV2(signal):
+    """ This functoin evaluate Average of EMG signal Amplitude, using the modified version n°.2.::
+    """
+    
+    N = len(signal)
+    wIndexMin = int(0.25 * N) #get the index at 0.25N
+    wIndexMax = int(0.75 * N)#get the index at 0.75N
+
+    temp = [] #create an empty list
+    for i in range(0,wIndexMin): #case 1: i < 0.25N
+        x = abs(signal[i] * (4*i/N))
+        temp.append(x)
+    for i in range(wIndexMin,wIndexMax+1): #case2: 0.25 <= i <= 0.75N
+        x = abs(signal[i])
+        temp.append(x)
+    for i in range(wIndexMax+1,N): #case3; i > 0.75N
+        x = abs(signal[i]) * (4*(i - N) / N)
+        temp.append(x)
+        
+    MAV2 = np.sum(temp) / N
+    return(MAV2)
+
+
+
+def getMAVSLPk(signal, nseg):
+    """ Mean Absolute value slope is a modified versions of MAV feature.
+    """
+    N = len(signal)
+    lenK = int(N / nseg) #length of each segment to compute
+    MAVSLPk = []
+    for s in range(0,N,lenK):
+        MAVSLPk.append(getMAV(signal[s:s+lenK]))
+    return(MAVSLPk) 
+
+
+
 def myopulse(signal, th):
     umbral = signal >= th
     return np.sum(umbral) / len(signal)
+
+
+def getHIST(signal,nseg=9,th=50):
+    """ Histograms is an extension version of ZC and WAMP features. 
+    """
+    segmentLength = int(len(signal) / nseg)
+    HIST = {}
+    for seg in range(0,nseg):
+        HIST[seg+1] = {}
+        thisSegment = signal[seg * segmentLength: (seg+1) * segmentLength]
+        HIST[seg+1]["ZC"] = zcruce(thisSegment,th)
+        HIST[seg+1]["WAMP"] = wilson_amplitude(thisSegment,th)
+    return(HIST)
+
 
 
 def spectrum(signal, fs):
