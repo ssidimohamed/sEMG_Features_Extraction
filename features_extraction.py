@@ -24,7 +24,7 @@ def features_estimation(signal, channel_name, fs, frame, step, plot=False):
 
     """
 
-    features_names = ['MEAN', 'VAR', 'SD' 'RMS', 'IEMG', 'SSI', 'MAV', 'MAV1', 'MAV2', 'MAVSLP' 'LOG', 'WL', 'ACC', 'DASDV', 'ZC', 'WAMP', 'MYOP', 'SKEW', 'KURT', 'SAMPEN', "HIST", "FR", "MNP", "TP",
+    features_names = ['MEAN', 'VAR', 'STD', 'MIN', 'MAX', 'RMS', 'IEMG', 'SSI', 'MAV', 'MAV1', 'MAV2', 'MAVSLP' 'LOG', 'WL', 'ACC', 'DASDV', 'ZC', 'WAMP', 'MYOP', 'SKEW', 'KURT', 'SAMPEN', "HIST", "VORDER", 'AMPENT', "FR", "MNP", "TP",
                       "MNF", "MDF", "PKF", "WENT"]
 
     time_matrix = time_features_estimation(signal, frame, step)
@@ -54,6 +54,8 @@ def time_features_estimation(signal, frame, step):
     mean = []
     variance = []
     std = []
+    min = []
+    max = []
     rms = []
     iemg = []
     ssi = []
@@ -71,16 +73,20 @@ def time_features_estimation(signal, frame, step):
     skw = []
     kurt = []
     sampen = []
+    ampent = []
     hist = []
+    vorder = []
 
     th = np.mean(signal) + 3 * np.std(signal)
 
     for i in range(frame, signal.size, step):
         x = signal[i - frame:i]
 
-        mean.append(np.mean(x))
+        mean.append(np.mean(x)) 
         variance.append(np.var(x))
         std.append(np.sd(x))
+        min.append(min(x))
+        max.append(max(x))
         rms.append(np.sqrt(np.mean(x ** 2)))
         iemg.append(np.sum(abs(x)))  # Integral
         ssi.append(np.sum(abs(x)**2))  
@@ -99,11 +105,13 @@ def time_features_estimation(signal, frame, step):
         skw.append(skew(x, bias=False))
         kurt.append(kurtosis(x, bias=False))
         sampen.append(ant.sample_entropy(x))
+        ampent.append(ant.app_entropy(x))
         hist.append(getHIST(signal))
+        vorder.append(v_order(x))
 
 
 
-    time_features_matrix = np.column_stack((mean, variance, std, rms, iemg, ssi, mav, mav1, mav2, mavslp, log_detector, wl, aac, dasdv, zc, wamp, myop, skw, kurt, sampen, hist))
+    time_features_matrix = np.column_stack((mean, variance, std, min, max, rms, iemg, ssi, mav, mav1, mav2, mavslp, log_detector, wl, aac, dasdv, zc, wamp, myop, skw, kurt, sampen, ampent, hist, vorder))
     return time_features_matrix
 
 
@@ -169,6 +177,9 @@ def wilson_amplitude(signal, th):
     umbral = x >= th
     return np.sum(umbral)
 
+
+def v_order (x, v):
+    return (mean(x**v))**(1/v)
 
 
 def getMAV(signal):
